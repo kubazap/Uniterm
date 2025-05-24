@@ -1,27 +1,31 @@
-"""Interfejs graficzny do rysowania unitermów."""
+"""Interfejs graficzny do rysowania unitermów.
+   Wersja z poprawionym wyrównaniem pionowej sekwencji ‒
+   niezależnie od tego, czy zamiana dotyczy pola A czy B.
+"""
 
 from __future__ import annotations
 from tkinter import Canvas, font
 from core.models import Uniterm
 
-# Stałe graficzne
-SEP      = ";"           # separator tekstowy
+# ── stałe graficzne ──────────────────────────────────────────────────────────
+SEP = "     ;     "     # separator tekstowy
+SEP_V = ";"      # separator tekstowy
 GRID_CLR = "#f3f3f3"     # kolor linii siatki
 LINE_CLR = "#3F72AF"     # kolor klamer
-LABEL_H  = 60            # wysokość paska opisów
+LABEL_H  = 60            # wysokość paska opisów u dołu
 
 
 class UnitermCanvas(Canvas):
-    """Canvas z siatką w tle i metodą renderującą Uniterm."""
+    """Canvas wyposażony w siatkę oraz metodę `draw(Uniterm, dx)`."""
 
+    # ───────────────────────── constructor / grid ───────────────────────────
     def __init__(self, master, grid: int = 14, **kw):
         super().__init__(master, bg="white", **kw)
         self.grid = grid
         self.bind("<Configure>", lambda _e: self._draw_grid())
 
-    # ---------- Rysowanie tła ----------
     def _draw_grid(self) -> None:
-        """Rysuje punktową siatkę oraz biały pasek na etykiety."""
+        """Punktowa siatka + biały pasek na etykiety u dołu."""
         self.delete("grid")
         w, h, g = self.winfo_width(), self.winfo_height(), self.grid
         dash = (1, 3)
@@ -31,77 +35,115 @@ class UnitermCanvas(Canvas):
             self.create_line(0, y, w, y, fill=GRID_CLR, dash=dash, tags="grid")
         self.create_rectangle(0, h - LABEL_H, w, h, outline="", tags="grid")
 
-    # ---------- Klamry ----------
-    def _h_bracket(self, x1, x2, y) -> None:
+    # ───────────────────────── klamry ───────────────────────────────────────
+    def _h_bracket(self, x1: int, x2: int, y: int) -> None:
         half = 6
-        self.create_line(x1, y, x2, y, fill=LINE_CLR, width=2, tags="uniterm")
-        self.create_line(x1, y - half, x1, y + half, fill=LINE_CLR, width=2, tags="uniterm")
-        self.create_line(x2, y - half, x2, y + half, fill=LINE_CLR, width=2, tags="uniterm")
+        self.create_line(x1-20, y, x2, y, fill=LINE_CLR, width=2, tags="uniterm")
+        self.create_line(x1-20, y-half, x1-20, y+half,
+                         fill=LINE_CLR, width=2, tags="uniterm")
+        self.create_line(x2, y-half, x2, y+half,
+                         fill=LINE_CLR, width=2, tags="uniterm")
 
-    def _v_bracket(self, x, y1, y2) -> None:
-        seg = 10
-        self.create_line(x, y1 - 8, x, y2, fill=LINE_CLR, width=2, tags="uniterm")
-        self.create_line(x - 6, y1 - 8, x + seg, y1 - 8, fill=LINE_CLR, width=2, tags="uniterm")
-        self.create_line(x - 6, y2, x + seg, y2, fill=LINE_CLR, width=2, tags="uniterm")
+    def _v_bracket(self, x: int, y1: int, y2: int) -> None:
+        seg = 8
+        self.create_line(x,   y1-8, x,   y2,
+                         fill=LINE_CLR, width=2, tags="uniterm")
+        self.create_line(x-6, y1-8, x+seg, y1-8,
+                         fill=LINE_CLR, width=2, tags="uniterm")
+        self.create_line(x-6, y2,    x+seg, y2,
+                         fill=LINE_CLR, width=2, tags="uniterm")
 
-    def _bracket_over(self, text_id, pad: int = 4) -> None:
-        """Rysuje klamrę nad tekstem o id `text_id`."""
+    def _bracket_over(self, text_id: int, pad: int = 4) -> None:
+        """Pozioma klamra tuż nad obiektem `text_id`."""
         x1, y1, x2, _ = self.bbox(text_id)
-        self._h_bracket(x1 - pad, x2 + pad, y1 - 2)
+        self._h_bracket(x1 - pad, x2 + pad + 20, y1 - 8)
 
-    # ---------- Rysowanie unitermu ----------
-    def draw(self, u: Uniterm | None, dx: int = 0) -> None:
-        """Czyści poprzedni rysunek i renderuje `u` z przesunięciem `dx`."""
-        if u is None:
-            return
-
-        fnt = font.Font(family=u.font_family, size=u.font_size, weight="bold")
-        h = self.winfo_height()
-
-        if u.orientation == "H":
-            # --- Poziomy uniterm ---
-            y0 = 95
-            txt = f"{u.a}{SEP} {u.b}{SEP} {u.cond}"
-            text_w = fnt.measure(txt)
-            x0 = 80 + dx
-            self._h_bracket(x0 - 8, x0 + text_w + 16, y0)
-            self.create_text(x0 + 3, y0 + 15, text=txt, anchor="w",
-                             font=fnt, tags="uniterm")
-            self._label(h, x0 + (text_w + 16) / 2, "Pozioma", fnt)
-        else:
-            # --- Pionowy uniterm ---
-            lines, idx = self._vertical_lines(u)
-            step, start_y = 42, 80
-            tx, bx = dx, dx - 20          
-            extra = 10                    
-
-            for i, t in enumerate(lines):
-                y = start_y + i * step + (extra if i == idx else 0)
-                tid = self.create_text(tx, y, text=t, anchor="w",
-                                       font=fnt, tags="uniterm")
-                if i == idx:
-                    self._bracket_over(tid, pad=6)
-
-            y1 = start_y - 25 + extra
-            y2 = start_y + (len(lines) - 1) * step + 25
-            self._v_bracket(bx, y1, y2)
-
-            max_w = max(fnt.measure(t) for t in lines)
-            self._label(h, tx + max_w / 2, "Pionowa", fnt)
-
-    @staticmethod
-    def _vertical_lines(u: Uniterm):
-        """Zwraca listę wierszy oraz indeks wiersza z klamrą."""
-        if u.bracket_on == "A":
-            return [u.seq_csv, SEP, u.b, SEP, u.cond], 0
-        return [u.a, SEP, u.seq_csv, SEP, u.cond], 2
-
-    def _label(self, h, x, text, fnt):
-        """Rysuje podpis pod rysunkiem."""
+    # ─────────────────────── podpis pod rysunkiem ───────────────────
+    def _label(self, h: int, x_center: float, text: str, fnt) -> None:
         self.create_text(
-            x, h - LABEL_H / 2 - 3,
+            x_center, h - LABEL_H/2 - 3,
             text=text,
             fill=LINE_CLR,
             font=(fnt.actual("family"), fnt.actual("size") - 2),
             tags="uniterm",
         )
+
+    # ───────────────────────── rysowanie całości ─────────────────────
+    def draw(self, u: Uniterm | None, dx: int = 0) -> None:
+        """Renderuje przekazany `Uniterm`.  `dx` – dodatkowe przesunięcie X."""
+        if u is None:
+            return
+
+        fnt = font.Font(family=u.font_family,
+                        size=u.font_size,
+                        weight="bold")
+        h_canvas = self.winfo_height()
+
+        # ═════════════════════════════════════════════════════════════
+        # 1) POSTAĆ POZIOMA
+        # ═════════════════════════════════════════════════════════════
+        if u.orientation == "H":
+            y0   = 95
+            text = f"{u.a}{SEP} {u.b}{SEP} {u.cond}"
+            w    = fnt.measure(text)
+            x0   = 80 + dx
+
+            self._h_bracket(x0+12, x0 + w + 16, y0)
+            self.create_text(x0 + 3, y0 + 20,
+                             text=text,
+                             anchor="w",
+                             font=fnt,
+                             tags="uniterm")
+            self._label(h_canvas, x0 + (w + 16)/2, "Pozioma", fnt)
+            return      # ⬅ Nie rysujemy dalej.
+
+        # ═════════════════════════════════════════════════════════════
+        # 2) POSTAĆ PIONOWA
+        # ═════════════════════════════════════════════════════════════
+        seq: list[str] = u.seq or ["—"]
+        first_seq      = seq[0]
+
+        # 2.1  NAGŁÓWEK  (first_seq + pozostałe parametry)
+        if u.bracket_on.upper() == "A":
+            heading = f"{first_seq} {SEP} {u.b} {SEP} {u.cond}"
+            prefix  = ""                          # tekst przed first_seq
+        else:
+            heading = f"{u.a} {SEP} {first_seq} {SEP} {u.cond}"
+            prefix  = f"{u.a} {SEP} "             # potrzebny do obliczeń
+
+        start_x  = dx + 45
+        start_y  = 117
+        tid = self.create_text(start_x, start_y,
+                               text=heading,
+                               anchor="w",
+                               font=fnt,
+                               tags="uniterm")
+        self._bracket_over(tid, pad=6)
+
+        # 2.2  PIONOWA SEKWENCJA  (wszystko poza first_seq)
+        rest_seq = seq[1:]
+        seq_lines: list[str] = []
+        for item in rest_seq:
+            seq_lines.extend([SEP_V, item])         #  ; Y ; Z …
+
+        if seq_lines:
+            # kolumna pionowej listy – dokładnie pod first_seq
+            seq_x = start_x + fnt.measure(prefix)
+            seq_y0 = start_y + 42                 # pierwszy „;” 42 px poniżej nagłówka
+            step   = 42
+
+            for i, t in enumerate(seq_lines):
+                self.create_text(seq_x, seq_y0 + i*step,
+                                 text=t,
+                                 anchor="w",
+                                 font=fnt,
+                                 tags="uniterm")
+
+            # pionowa klamra tylko przy sekwencji
+            y1 = seq_y0 - 6
+            y2 = seq_y0 + (len(seq_lines)-1)*step + 6
+            self._v_bracket(seq_x - 14, y1 - 36, y2 + 8)
+
+        # podpis
+        max_w = max(fnt.measure(s) for s in [heading] + seq_lines) or 1
+        self._label(h_canvas, start_x + max_w/2, "Pionowa", fnt)

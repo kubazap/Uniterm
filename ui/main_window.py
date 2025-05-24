@@ -29,7 +29,7 @@ class MainWindow(tb.Window):
     # ---------- Budowanie UI ----------
     def _build_ui(self):
         self.title("Uniterm")
-        width, height = 1050, 500
+        width, height = 1200, 500
         self.resizable(False, False)
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{width}x{height}+{(sw - width)//2}+{(sh - height)//2}")
