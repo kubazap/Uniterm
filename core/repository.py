@@ -8,29 +8,37 @@ from .settings import DB
 
 
 class UnitermRepository:
-    """DAO korzystający z puli połączeń MySQLConnector."""
+    """DAO z pulą połączeń."""
 
+    # ────────────────────────────────────────────────────────────────
+    #  Konstruktor  +  pomocnicze
+    # ────────────────────────────────────────────────────────────────
     def __init__(self, **override_cfg):
-        self.pool = pooling.MySQLConnectionPool(**(DB | override_cfg))
+        cfg = DB | override_cfg
+        self.pool = pooling.MySQLConnectionPool(**cfg)
 
     def _conn(self):
-        """Nowe połączenie z puli."""
+        """Zwraca połączenie z puli."""
         return self.pool.get_connection()
 
+    # ────────────────────────────────────────────────────────────────
+    #  SELECT  lista nazw
+    # ────────────────────────────────────────────────────────────────
     def names(self) -> list[str]:
-        """Zwraca listę wszystkich nazw unitermów posortowaną alfabetycznie."""
+        """Alfabetycznie posortowana lista nazw unitermów."""
         sql = "SELECT name FROM uniterms ORDER BY name"
         with contextlib.closing(self._conn()) as cnx:
             cur = cnx.cursor()
             try:
                 cur.execute(sql)
-                rows = cur.fetchall()
-                return [r[0] for r in rows]
+                return [row[0] for row in cur.fetchall()]
             finally:
                 cur.close()
 
+    # ────────────────────────────────────────────────────────────────
+    #  SELECT  pojedynczy rekord
+    # ────────────────────────────────────────────────────────────────
     def get(self, name: str) -> Uniterm | None:
-        """Pobiera jeden rekord po nazwie; zwraca None, gdy brak."""
         sql = "SELECT * FROM uniterms WHERE name=%s"
         with contextlib.closing(self._conn()) as cnx:
             cur = cnx.cursor(dictionary=True)
@@ -41,22 +49,31 @@ class UnitermRepository:
             finally:
                 cur.close()
 
+    # ────────────────────────────────────────────────────────────────
+    #  INSERT / UPDATE (UPSERT)
+    # ────────────────────────────────────────────────────────────────
     def save(self, u: Uniterm) -> None:
-        """Wstawia lub aktualizuje rekord (ON DUPLICATE KEY)."""
         sql = """
         INSERT INTO uniterms
-          (name,description,a,b,cond,orientation,seq_str,bracket_on)
+          (name, description, a, b, cond,
+           x, y, cond2, orientation, bracket_on)
         VALUES
-          (%s,%s,%s,%s,%s,%s,%s,%s)
+          (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ON DUPLICATE KEY UPDATE
-          description=VALUES(description),
-          a=VALUES(a), b=VALUES(b), cond=VALUES(cond),
-          orientation=VALUES(orientation),
-          seq_str=VALUES(seq_str), bracket_on=VALUES(bracket_on)
+          description = VALUES(description),
+          a           = VALUES(a),
+          b           = VALUES(b),
+          cond        = VALUES(cond),
+          x           = VALUES(x),
+          y           = VALUES(y),
+          cond2       = VALUES(cond2),
+          orientation = VALUES(orientation),
+          bracket_on  = VALUES(bracket_on)
         """
         vals = (
             u.name, u.description, u.a, u.b, u.cond,
-            u.orientation, u.seq_csv, u.bracket_on,
+            u.x, u.y, u.cond2,
+            u.orientation, u.bracket_on,
         )
         with contextlib.closing(self._conn()) as cnx:
             cur = cnx.cursor()
@@ -66,8 +83,10 @@ class UnitermRepository:
             finally:
                 cur.close()
 
+    # ────────────────────────────────────────────────────────────────
+    #  DELETE
+    # ────────────────────────────────────────────────────────────────
     def delete(self, name: str) -> None:
-        """Usuwa rekord o podanej nazwie."""
         sql = "DELETE FROM uniterms WHERE name=%s"
         with contextlib.closing(self._conn()) as cnx:
             cur = cnx.cursor()
